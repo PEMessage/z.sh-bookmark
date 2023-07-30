@@ -1,3 +1,86 @@
+# z.sh-bookmark
+## Introduce
+A fork from rupa/z, but now you could bookmark a dir to get more control about the behavior!
+Excpt `z` command, also provide a function `z-mark` allow you quickly bookmark a dir.
+
+
+## Usage
+```shell
+# EXTRA USAGE (z.sh-bookmark)
+#     * z -m                                  # show all bookmark (notice: it will overwrite others option)
+#                                             # example : `z -mlt` will equal to `z -m` looking forward to improve in futrue
+#     * z --read-mark [path or bookmark name] # if given a path return its bookmark name , given bookmark name return path
+#     * z --mark [bookmark name] [path]       # show all bookmark 
+#     * z [bookmark]                          # jump to bookmark, NOTICE: your will need to type full bookmark name
+# HANDY FUNCTION (z-mark)
+#     * z-mark [bookmark name]                # mark $PWD with [bookmark name]
+#     * z-mark                                # clean $PWD bookmark
+```
+
+## fzf combine (z-fzf function)
+1. source following script to your .bashrc or .zshrc or append it to z.sh
+2. if you given any path as argument, is equal to z command 
+   1. `cdd [path]` : equal to `z` , jump by mix rank and time
+   2. `cdt [path]` : equal to `z -t`, jump by recent time
+   3. `cdr [path]` : equal to `z -r`, jump by rank
+3. if no argument was given, it will show a list in fzf, press enter to `cd` to it
+   1. `cdd` : sort list by mix time and rank
+   2. `cdt` : sort list by time
+   3. `cdr` : sort list by  rank
+   4. `cdm` : show all bookmark
+
+```shell
+z-fzf(){ 
+
+    _z_dirs(){
+        [ -f "$datafile" ] || return
+
+        local line
+        while read line; do
+            # only count directories
+            [ -d "${line%%\|*}" ] && echo "$line"
+        done < "$datafile"
+        return 0
+    }
+    local datafile="${_Z_DATA:-$HOME/.z}"
+    local fnd opt cmd
+    while [ "$1" ]; do case "$1" in
+        --) while [ "$1" ]; do shift; fnd="$fnd${fnd:+ }$1";done;;
+        -*) opt=${1:1}; while [ "$opt" ]; do case ${opt:0:1} in
+                t)cmd='t';;
+                r)cmd='r';;
+                m)cmd='did
+                d)cmd='d';;
+            esac; opt=${opt:1}; done;;
+         *) fnd="$fnd${fnd:+ }$1";;
+    esac; last=$1; [ "$#" -gt 0 ] && shift; done
+
+    if [ "$cmd" = d ] ; then
+        [ -n "$fnd" ] &&  _z  "$fnd" && return
+        local temp=` _z -l 2>&1 | awk '{print $2}' | fzf  --no-sort | sed -e "s@^~@${HOME}@g" `
+        cd "$temp"
+
+    elif [ "$cmd" = t -o "$cmd" = r ] ; then
+        [ -n "$fnd" ] &&  _z -"$cmd" "$fnd" && return
+        local temp=` _z -l"$cmd" 2>&1 | awk '{print $2}' | fzf  --no-sort | sed -e "s@^~@${HOME}@g" `
+        cd "$temp"
+    elif [ "$cmd" = m ] ; then
+        [ -n "$fnd" ] &&  _z "$fnd" && return
+        local temp=` _z -m 2>&1 | awk '{print $2}' | fzf  --no-sort | sed -e "s@^~@${HOME}@g" `
+        cd "$temp"
+    else
+        return 1 
+    fi
+}
+
+alias cdt='z-fzf -t '
+alias cdr='z-fzf -r '
+alias cdd='z-fzf -d '
+alias cdm='z-fzf -m '
+```
+
+## Origin Document 
+```man
 Z(1)                             User Commands                            Z(1)
 
 
@@ -146,3 +229,4 @@ SEE ALSO
 
 
 z                                January 2013                             Z(1)
+```

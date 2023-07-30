@@ -27,6 +27,17 @@
 #     * z -x      # remove the current directory from the datafile
 #     * z -h      # show a brief help message
 
+# EXTRA USAGE (z.sh-bookmark)
+#     * z -m                                  # show all bookmark (notice: it will overwrite others option)
+#                                             # example : `z -mlt` will equal to `z -m` looking forward to improve in futrue
+#     * z --read-mark [path or bookmark name] # if given a path return its bookmark name , given bookmark name return path
+#     * z --mark [bookmark name] [path]       # show all bookmark 
+#     * z [bookmark]                          # jump to bookmark, NOTICE: your will need to type full bookmark name
+# HANDY FUNCTION (z-mark)
+#     * z-mark [bookmark name]                # mark $PWD with [bookmark name]
+#     * z-mark                                # clean $PWD bookmark
+
+
 [ -d "${_Z_DATA:-$HOME/.z}" ] && {
     echo "ERROR: z.sh's datafile (${_Z_DATA:-$HOME/.z}) is a directory."
 }
@@ -74,8 +85,9 @@ _z() {
             BEGIN {
                 rank[path] = 1
                 time[path] = now
+                mark[path] = ""
             }
-            $2 >= 1 {
+            $2 >= 1 || $4 != "" {
                 # drop ranks below 1
                 if( $1 == path ) {
                     rank[$1] = $2 + 1
@@ -84,13 +96,14 @@ _z() {
                     rank[$1] = $2
                     time[$1] = $3
                 }
+                mark[$1] = $4
                 count += $2
             }
             END {
                 if( count > score ) {
                     # aging
-                    for( x in rank ) print x "|" 0.99*rank[x] "|" time[x]
-                } else for( x in rank ) print x "|" rank[x] "|" time[x]
+                    for( x in rank ) print x "|" 0.99*rank[x] "|" time[x] "|" mark[x]
+                } else for( x in rank ) print x "|" rank[x] "|" time[x] "|" mark[x]
             }
         ' 2>/dev/null >| "$tempfile"
         # do our best to avoid clobbering the datafile in a race condition.
@@ -100,6 +113,57 @@ _z() {
             [ "$_Z_OWNER" ] && chown $_Z_OWNER:"$(id -ng $_Z_OWNER)" "$tempfile"
             env mv -f "$tempfile" "$datafile" || env rm -f "$tempfile"
         fi
+
+    elif [ "$1" = '--mark' ] ; then
+        shift
+        local mark_name="$1"
+        shift
+
+        local tempfile="$datafile.$RANDOM"
+        local score=${_Z_MAX_SCORE:-9000}
+        _z_dirs | awk -v path="$*" -v mark_name="$mark_name" -F"|" '
+            {
+                if( $1 == path ) {
+                    rank[$1] = $2
+                    time[$1] = $3
+                    mark[$1] = mark_name
+                } else {
+                    rank[$1] = $2
+                    time[$1] = $3
+                    mark[$1] = $4
+                }
+            }
+            END {
+                if( count > score ) {
+                    # aging
+                    for( x in rank ) print x "|" 0.99*rank[x] "|" time[x] "|" mark[x]
+                } else for( x in rank ) print x "|" rank[x] "|" time[x] "|" mark[x]
+            } 
+        ' 2>/dev/null >| "$tempfile"
+        # do our best to avoid clobbering the datafile in a race condition.
+        if [ $? -ne 0 -a -f "$datafile" ]; then
+            env rm -f "$tempfile"
+        else
+            [ "$_Z_OWNER" ] && chown $_Z_OWNER:"$(id -ng $_Z_OWNER)" "$tempfile"
+            env mv -f "$tempfile" "$datafile" || env rm -f "$tempfile"
+        fi
+    elif [ "$1" = '--read-mark' ] ; then
+        shift
+        [ -z "$*" ] && return 0
+
+        _z_dirs | awk -v path_or_mark="$*" -F"|" '
+            {
+                if ( $1 == path_or_mark ) {
+                    print "Mark:" $4
+                    exit
+
+                } 
+                if ( $4 == path_or_mark ) {
+                    print "Path:" $1
+                    exit
+                }
+            }
+        ' 2>/dev/null     
 
     # tab completion
     elif [ "$1" = "--complete" -a -s "$datafile" ]; then
@@ -116,6 +180,8 @@ _z() {
             }
         ' 2>/dev/null
 
+
+
     else
         # list/go
         local echo fnd last list opt typ
@@ -124,10 +190,11 @@ _z() {
             -*) opt=${1:1}; while [ "$opt" ]; do case ${opt:0:1} in
                     c) fnd="^$PWD $fnd";;
                     e) echo=1;;
-                    h) echo "${_Z_CMD:-z} [-cehlrtx] args" >&2; return;;
+                    h) echo "${_Z_CMD:-z} [-cehlrtxm] args" >&2; return;;
                     l) list=1;;
                     r) typ="rank";;
                     t) typ="recent";;
+                    m) typ="mark";;
                     x) sed -i -e "\:^${PWD}|.*:d" "$datafile";;
                 esac; opt=${opt:1}; done;;
              *) fnd="$fnd${fnd:+ }$1";;
@@ -143,6 +210,17 @@ _z() {
         # no file yet
         [ -f "$datafile" ] || return
 
+        if [ "$typ" = "mark" ]; then
+            local temp=` _z_dirs | awk -F"|" '
+                $4 != "" {
+                    printf "%-10s %s\n", $4, $1 
+                }
+            '  `
+            echo $temp
+            return 0
+
+        fi
+
         local cd
         cd="$( < <( _z_dirs ) awk -v t="$(date +%s)" -v list="$list" -v typ="$typ" -v q="$fnd" -F"|" '
             function frecent(rank, time) {
@@ -156,7 +234,7 @@ _z() {
                     if( common ) {
                         printf "%-10s %s\n", "common:", common > "/dev/stderr"
                     }
-                    cmd = "sort -n >&2"
+                    cmd = "sort -n -r >&2"
                     for( x in matches ) {
                         if( matches[x] ) {
                             printf "%-10s %s\n", matches[x], x | cmd
@@ -183,8 +261,13 @@ _z() {
             BEGIN {
                 gsub(" ", ".*", q)
                 hi_rank = ihi_rank = -9999999999
+                match_mark = ""
             }
             {
+                if ( q == $4 && $4 != "" ) {
+                    is_match_mark = $1
+                    next
+                }
                 if( typ == "rank" ) {
                     rank = $2
                 } else if( typ == "recent" ) {
@@ -203,7 +286,10 @@ _z() {
             }
             END {
                 # prefer case sensitive
-                if( best_match ) {
+                if ( is_match_mark != "" ) {
+                    print is_match_mark
+                    exit
+                } else if( best_match ) {
                     output(matches, best_match, common(matches))
                     exit
                 } else if( ibest_match ) {
@@ -237,10 +323,16 @@ if type compctl >/dev/null 2>&1; then
                 (_z --add "${PWD:a}" &)
                 : $RANDOM
             }
+            _z_curdir() {
+                echo "${PWD:a}"
+            }
         else
             _z_precmd() {
                 (_z --add "${PWD:A}" &)
                 : $RANDOM
+            }
+            _z_curdir() {
+                echo "${PWD:A}"
             }
         fi
         [[ -n "${precmd_functions[(r)_z_precmd]}" ]] || {
@@ -263,5 +355,27 @@ elif type complete >/dev/null 2>&1; then
         grep "_z --add" <<< "$PROMPT_COMMAND" >/dev/null || {
             PROMPT_COMMAND="$PROMPT_COMMAND"$'\n''(_z --add "$(command pwd '$_Z_RESOLVE_SYMLINKS' 2>/dev/null)" 2>/dev/null &);'
         }
+        _z_curdir(){
+            echo "$(command pwd '$_Z_RESOLVE_SYMLINKS' 2>/dev/null)"
+        }
     }
 fi
+
+
+z-mark(){
+    local mark_name
+    local prompt_message
+    local local_dir=`_z_curdir`
+    if [ -z $1 ] ; then
+        mark_nane=''
+        prompt_message='Clean the mark'
+    else
+        mark_name="$1"
+        prompt_message="Mark to $mark_name"
+    fi
+    # echo $local_dir
+    _z --mark "$mark_name" "$local_dir"
+    echo "$local_dir -> $prompt_message "
+
+}
+
