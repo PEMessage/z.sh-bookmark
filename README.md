@@ -19,11 +19,11 @@ Excpt `z` command, also provide a function `z-mark` allow you quickly bookmark a
 
 ## fzf combine (z-fzf function)
 1. source following script to your .bashrc or .zshrc or append it to z.sh
-2. if you given any path as argument, is equal to z command 
+2. if you given any path as argument, it equal to z command 
    1. `cdd [path]` : equal to `z` , jump by mix rank and time
    2. `cdt [path]` : equal to `z -t`, jump by recent time
    3. `cdr [path]` : equal to `z -r`, jump by rank
-3. if no argument was given, it will show a list in fzf, press enter to `cd` to it
+3. if no argument was given, it will show list in fzf, press enter to `cd` to it
    1. `cdd` : sort list by mix time and rank
    2. `cdt` : sort list by time
    3. `cdr` : sort list by  rank
