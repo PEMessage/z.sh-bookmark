@@ -49,7 +49,7 @@ z-fzf(){
         -*) opt=${1:1}; while [ "$opt" ]; do case ${opt:0:1} in
                 t)cmd='t';;
                 r)cmd='r';;
-                m)cmd='did
+                m)cmd='m';;
                 d)cmd='d';;
             esac; opt=${opt:1}; done;;
          *) fnd="$fnd${fnd:+ }$1";;
@@ -66,7 +66,7 @@ z-fzf(){
         cd "$temp"
     elif [ "$cmd" = m ] ; then
         [ -n "$fnd" ] &&  _z "$fnd" && return
-        local temp=` _z -m 2>&1 | awk '{print $2}' | fzf  --no-sort | sed -e "s@^~@${HOME}@g" `
+        local temp=` _z -m 2>&1 | fzf  --no-sort | awk '{print $2}' |  sed -e "s@^~@${HOME}@g" `
         cd "$temp"
     else
         return 1 
