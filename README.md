@@ -1,6 +1,6 @@
 # z.sh-bookmark
 # !!! DEPRECATED !!!
-use https://github.com/PEMessage/fasd instead
+use https://github.com/PEMessage/fasd-bookmark instead
 ## Introduce
 A fork from rupa/z, but now you could bookmark a dir to get more control about the behavior!
 Excpt `z` command, also provide a function `z-mark` allow you quickly bookmark a dir.
